@@ -1,0 +1,10 @@
+drop materialized view importcedr.mv_dotace;
+drop materialized view importcedr.mv_rozhodnuti;
+drop materialized view importcedr.mv_cerpani;
+drop view importcedr.v_operacniprogram;
+drop view importcedr.v_priorita;
+drop view importcedr.v_grantoveschema;
+drop view importcedr.v_opatreni;
+drop view importcedr.v_podopatreni;
+drop view importcedr.v_podprogram;
+drop view importcedr.v_adresa;
