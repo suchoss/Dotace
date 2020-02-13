@@ -1,20 +1,8 @@
 import pandas as pd
 import unidecode
 import re
+from sqlalchemy import create_engine, types, schema
 import logging
-
-pd.set_option('display.max_rows', 20)
-pd.set_option('display.max_columns', 100)
-pd.set_option('display.width', 1000)
-
-FILE_PATH = 'data/dotinfo.json'
-
-logging.info('Načítám json')
-df = pd.read_json(FILE_PATH)
-
-# drop paging
-logging.info('Mažu paging')
-df = df[df.type != 'paging']
 
 
 def tab1_to_series(text):
@@ -42,6 +30,31 @@ def normalize_column_name(name):
     return unidecode.unidecode(strippedChars).lower()
 
 
+def runSqlQueries(eng, filename):
+    with eng.connect() as connection:
+        with open(filename) as file:
+            commands = file.readlines()
+            for sql in commands:
+                try:
+                    connection.execute(sql)
+                except:
+                    logging.info('Nejde spustit %s', sql)
+
+#inicializace
+pd.set_option('display.max_rows', 20)
+pd.set_option('display.max_columns', 100)
+pd.set_option('display.width', 1000)
+
+logging.getLogger().setLevel(logging.INFO)
+FILE_PATH = 'data/dotinfo.json'
+
+logging.info('Načítám json')
+df = pd.read_json(FILE_PATH)
+
+# drop paging
+logging.info('Mažu paging')
+df = df[df.type != 'paging']
+
 logging.info('Rozbaluji tab1')
 df = pd.concat([df, df['data'].apply(tab1_to_series)], axis=1)
 logging.info('Rozbaluji tab2')
@@ -54,21 +67,22 @@ df = pd.concat([df, df['data'].apply(tab4_to_series)], axis=1)
 # normalizovat názvy sloupců
 logging.info('Normalizuji názvy sloupců')
 df.columns = [normalize_column_name(c) for c in df.columns]
+
 # odmazat zbytečné sloupce
 logging.info('Promazávám zbytečné sloupce')
 df = df.drop(['type', 'pagetitle', 'data'], axis='columns')
 
-# připojení k postgres
-dbschema = 'importcedr'
-engine = create_engine('postgresql://postgres:xxx@localhost:5432/postgres')
-if not engine.dialect.has_schema(engine, dbschema):
-    engine.execute(schema.CreateSchema('importcedr'))
-
-# drop views
-runSqlQueries(engine, 'drop_views.sql')
-
 indLabel = df.columns[0]
 df.set_index(df.columns[0], inplace=True)
+
+# připojení k postgres
+dbschema = 'importdotinfo'
+engine = create_engine('postgresql://postgres:xxx@localhost:5432/postgres')
+if not engine.dialect.has_schema(engine, dbschema):
+    engine.execute(schema.CreateSchema(dbschema))
+
+# drop views
+#runSqlQueries(engine, 'drop_views.sql')
 
 df.to_sql('dotace',
           engine,

@@ -42,7 +42,7 @@ logging.info('Data jsou stažena')
 dbschema = 'importcedr'
 engine = create_engine('postgresql://postgres:xxx@localhost:5432/postgres')
 if not engine.dialect.has_schema(engine, dbschema):
-    engine.execute(schema.CreateSchema('importcedr'))
+    engine.execute(schema.CreateSchema(dbschema))
 
 # drop views
 runSqlQueries(engine, 'drop_views.sql')
