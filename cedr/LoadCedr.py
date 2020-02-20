@@ -39,7 +39,7 @@ with open('downloadList.csv') as f:
 
 logging.info('Data jsou stažena')
 # připojení k postgres
-dbschema = 'importcedr'
+dbschema = 'cedr'
 engine = create_engine('postgresql://postgres:xxx@localhost:5432/postgres')
 if not engine.dialect.has_schema(engine, dbschema):
     engine.execute(schema.CreateSchema(dbschema))
@@ -58,6 +58,8 @@ for fileToProcess in filesToProcess:
     indLabel = df.columns[0]
     df.set_index(df.columns[0], inplace=True)
     logging.info('Hotovo, ukládám do db')
+    if fileToProcess.split('.')[0].lower() == 'dotace':
+        df['projektidnetifikator'] = df['projektidnetifikator'].apply(lambda val: str(val).strip())
     df.to_sql(fileToProcess.split('.')[0].lower(),
               engine,
               schema=dbschema,

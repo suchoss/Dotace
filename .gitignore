@@ -5,6 +5,7 @@ __pycache__/
 
 # data folders
 data/
+tst/
 #pycharm
 .idea/
 # C extensions

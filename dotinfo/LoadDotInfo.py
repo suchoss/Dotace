@@ -72,11 +72,15 @@ df.columns = [normalize_column_name(c) for c in df.columns]
 logging.info('Promazávám zbytečné sloupce')
 df = df.drop(['type', 'pagetitle', 'data'], axis='columns')
 
+# přidat kód projektu
+logging.info('Přidávám kód projektu')
+df['kod_projektu'] = df['dotace_identifikator_dot_kod_is'].apply(lambda val: re.sub(r' / .*', '', val).strip())
+
 indLabel = df.columns[0]
 df.set_index(df.columns[0], inplace=True)
 
 # připojení k postgres
-dbschema = 'importdotinfo'
+dbschema = 'dotinfo'
 engine = create_engine('postgresql://postgres:xxx@localhost:5432/postgres')
 if not engine.dialect.has_schema(engine, dbschema):
     engine.execute(schema.CreateSchema(dbschema))

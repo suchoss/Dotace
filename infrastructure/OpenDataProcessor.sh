@@ -44,7 +44,7 @@ cd /opt/od/data/cedr
 psql -h localhost -p 5432 -U postgres -f init.sql
 
 # install requirements
-pip3 install -r /opt/od/requirements.txt
+pip3 install -r requirements.txt
 
 # run python on cedr
 python3 parse.py
