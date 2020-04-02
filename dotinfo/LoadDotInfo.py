@@ -1,5 +1,6 @@
 import pandas as pd
 import unidecode
+import os
 import re
 from sqlalchemy import create_engine, types, schema
 import logging
@@ -30,26 +31,20 @@ def normalize_column_name(name):
     return unidecode.unidecode(strippedChars).lower()
 
 
-def runSqlQueries(eng, filename):
-    with eng.connect() as connection:
-        with open(filename) as file:
-            commands = file.readlines()
-            for sql in commands:
-                try:
-                    connection.execute(sql)
-                except:
-                    logging.info('Nejde spustit %s', sql)
-
 #inicializace
 pd.set_option('display.max_rows', 20)
 pd.set_option('display.max_columns', 100)
 pd.set_option('display.width', 1000)
 
 logging.getLogger().setLevel(logging.INFO)
-FILE_PATH = 'data/dotinfo.json'
+FILE_PATH = 'data/dotinfo.json.gz'
+postgre_cnn = os.environ.get('POSTGRES_CONNECTION')
+if not postgre_cnn or postgre_cnn.isspace():
+    logging.error('Missing environment variable. Please set environment variable in following format: [POSTGRES_CONNECTION="postgresql://username:password@localhost:5432"]')
+    exit()
 
 logging.info('Načítám json')
-df = pd.read_json(FILE_PATH)
+df = pd.read_json(FILE_PATH, compression='gzip')
 
 # drop paging
 logging.info('Mažu paging')
@@ -81,12 +76,11 @@ df.set_index(df.columns[0], inplace=True)
 
 # připojení k postgres
 dbschema = 'dotinfo'
-engine = create_engine('postgresql://postgres:xxx@localhost:5432/postgres')
+database = '/import'
+
+engine = create_engine(postgre_cnn + database)
 if not engine.dialect.has_schema(engine, dbschema):
     engine.execute(schema.CreateSchema(dbschema))
-
-# drop views
-#runSqlQueries(engine, 'drop_views.sql')
 
 df.to_sql('dotace',
           engine,

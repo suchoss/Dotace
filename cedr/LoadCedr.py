@@ -10,6 +10,10 @@ DOWNLOAD_DIR = 'data/download/'
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 logging.getLogger().setLevel(logging.INFO)
 
+postgre_cnn = os.environ.get('POSTGRES_CONNECTION')
+if not postgre_cnn or postgre_cnn.isspace():
+    logging.error('Missing environment variable. Please set environment variable in following format: [POSTGRES_CONNECTION="postgresql://username:password@localhost:5432"]')
+    exit()
 
 def downloadFile(url):
     filename = os.path.split(urlparse(url).path)[-1].rstrip('\n')
@@ -20,15 +24,15 @@ def downloadFile(url):
     logging.info('Soubor %s je stažen', filename)
 
 
-def runSqlQueries(eng, filename):
-    with eng.connect() as connection:
-        with open(filename) as file:
-            commands = file.readlines()
-            for sql in commands:
-                try:
-                    connection.execute(sql)
-                except:
-                    logging.info('Nejde spustit %s', sql)
+# def runSqlQueries(eng, filename):
+#     with eng.connect() as connection:
+#         with open(filename) as file:
+#             commands = file.readlines()
+#             for sql in commands:
+#                 try:
+#                     connection.execute(sql)
+#                 except:
+#                     logging.info('Nejde spustit %s', sql)
 
 
 # stáhne všechna potřebná zdrojová data
@@ -40,12 +44,14 @@ with open('downloadList.csv') as f:
 logging.info('Data jsou stažena')
 # připojení k postgres
 dbschema = 'cedr'
-engine = create_engine('postgresql://postgres:xxx@localhost:5432/postgres')
+database = '/import'
+
+engine = create_engine(postgre_cnn + database)
 if not engine.dialect.has_schema(engine, dbschema):
     engine.execute(schema.CreateSchema(dbschema))
 
 # drop views
-runSqlQueries(engine, 'drop_views.sql')
+# runSqlQueries(engine, 'drop_views.sql')
 
 filesToProcess = os.listdir(DOWNLOAD_DIR)
 
@@ -71,4 +77,4 @@ for fileToProcess in filesToProcess:
               method='multi')  # spojuje inserty do větších kup, takže by to mělo být rychlejší
 
 # create views
-runSqlQueries(engine, 'create_views.sql')
+# runSqlQueries(engine, 'create_views.sql')
