@@ -17,6 +17,11 @@ logging.getLogger().setLevel(logging.INFO)
 pd.set_option('display.max_rows', 20)
 pd.set_option('display.max_columns', 100)
 pd.set_option('display.width', 1000)
+postgre_cnn = os.environ.get('POSTGRES_CONNECTION')
+if not postgre_cnn or postgre_cnn.isspace():
+    logging.error('Missing environment variable. Please set environment variable in following format: [POSTGRES_CONNECTION="postgresql://username:password@localhost:5432"]')
+    exit()
+
 
 logging.info('Stahuji aktuální data')
 os.system('python3 zpracuj.py')
@@ -45,26 +50,27 @@ logging.info('Normalizuji názvy sloupců u df13')
 df13.columns = [normalize_column_name(c) for c in df13.columns]
 
 logging.info('Načítám soubor projekty')
-dfnew = pd.read_csv('data/projekty.csv')
+df20 = pd.read_csv('data/projekty.csv')
 
 # rozbal json
 logging.info('Rozbaluji json')
-dfnew['zadatel_obec'] = dfnew['zadatel_adresa'].apply(lambda r: json.loads(r)['obnazev'])
-dfnew['zadatel_okres'] = dfnew['zadatel_adresa'].apply(lambda r: json.loads(r)['oknazev'])
-dfnew['zadatel_psc'] = dfnew['zadatel_adresa'].apply(lambda r: json.loads(r)['psc'])
+df20['zadatel_obec'] = df20['zadatel_adresa'].apply(lambda r: json.loads(r)['obnazev'])
+df20['zadatel_okres'] = df20['zadatel_adresa'].apply(lambda r: json.loads(r)['oknazev'])
+df20['zadatel_psc'] = df20['zadatel_adresa'].apply(lambda r: json.loads(r)['psc'])
 
 logging.info('Odstranuji neuzitecne sloupce')
-dfnew.drop(['zadatel_adresa', 'nazeva'], axis='columns', inplace=True)
+df20.drop(['zadatel_adresa', 'nazeva'], axis='columns', inplace=True)
 
 # prejmenovat vsude kod projektu
 df06.rename(columns={'cislo_projektu': 'kod_projektu'}, inplace=True)
 df13.rename(columns={'cislo_projektu': 'kod_projektu'}, inplace=True)
-dfnew.rename(columns={'kod': 'kod_projektu'}, inplace=True)
+df20.rename(columns={'kod': 'kod_projektu'}, inplace=True)
 
 
 # db import
 dbschema = 'eufondy'
-engine = create_engine('postgresql://postgres:xxx@localhost:5432/postgres')
+database = '/import'
+engine = create_engine(postgre_cnn + database)
 if not engine.dialect.has_schema(engine, dbschema):
     engine.execute(schema.CreateSchema(dbschema))
 
@@ -92,8 +98,8 @@ df13.to_sql('dotace2013',
             method='multi')
 
 logging.info('Nahravam do db soubor projekty')
-dfnew.set_index(indLabel, inplace=True)
-dfnew.to_sql('dotacenew',
+df20.set_index(indLabel, inplace=True)
+df20.to_sql('dotace2020',
              engine,
              schema=dbschema,
              if_exists='replace',

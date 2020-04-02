@@ -8,8 +8,13 @@ data/
 tst/
 #pycharm
 .idea/
+
+#vs code
+.vscode/
 # C extensions
 *.so
+
+conns
 
 # Distribution / packaging
 .Python
