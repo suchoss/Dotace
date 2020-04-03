@@ -63,7 +63,10 @@ def float_to_text(input):
     return "{:.0f}".format(input) if not pd.isnull(input) else None
 
 def fix_ico_format(ico: str):
-    if not ico or not ico.isdigit():
+    if not ico:
+        return None
+    ico = ico.replace(" ","")
+    if not ico.isdigit():
         return None
     return ico.rjust(8, "0")
 
@@ -512,7 +515,7 @@ def create_szif_rozhodnuti(cerpanocr, cerpanoeu, zdroj, rok):
 szif = pd.read_sql_table("dotace", postgre_cnn_import, schema="szif")
 # opravit špatně načtený datatyp
 szif["castka_cr"] = szif["castka_cr"].astype('float')
-szif["castka_eu"] = szif["castka_eu"].astype('float')
+szif["castka_eu"] = szif["castka_eu"].astype('float').fillna(0)
 logger.info('doplnuji rozhodnuti')
 szif["rozhodnuti"] = szif.apply(lambda x: create_szif_rozhodnuti(x["castka_cr"], x["castka_eu"], x["zdroj"], re.search(r"(\d{4})-",x["id"])[1]), axis=1 )
 logger.info('doplnuji program')
@@ -536,6 +539,52 @@ prep_dotace_for_export(szif)
 save_to_postgres(szif, "dotace", "szif")
 logger.info('SZIF uspesne zpracovano')
 
+
+## czechinvest
+logger.info('Zpracovavam Czechinvest ...')
+def create_czi_rozhodnuti(rozhodnuto, rok):
+    czrozhodnutodict = dict(castkaRozhodnuta = rozhodnuto, rok=rok, zdroj="CZ")
+    return [czrozhodnutodict]
+
+
+czi = pd.read_sql_table("dotace", postgre_cnn_import, schema="czechinvest")
+
+# fixnout data
+czi["castka"] = czi["rozhodnuti_mil_czk"].apply(lambda x: x * 1000000)
+czi["datumpodpisu"] = czi["rok_podani"].apply(lambda x: datetime.strptime(str(x), '%Y').strftime("%Y-%m-%dT00:00:00.000Z") if x else None)
+czi["iddotace"] = czi["id"].astype(str)
+
+# odstranit zrušené dotace
+czi = czi[czi["zruseno"].isna()]
+
+logger.info('doplnuji rozhodnuti')
+czi["rozhodnuti"] = czi.apply(lambda x: create_czi_rozhodnuti(x["castka"], x["rozhodnuti_rok"]), axis=1 )
+logger.info('zabaluji program')
+czi["program"] = czi["program"].apply(lambda x: dict(nazev=x))
+logger.info('detekuji chyby')
+czi["chyba"] = czi.apply(lambda x: [], axis=1)
+logger.info('doplnuji ico')
+czi["ico"] = czi.apply(lambda x: getIcoFromJmeno(fix_ico_format(x["ico"]), x["prijemce"]), axis=1)
+logger.info('nastavuji nazev projektu')
+czi["nazevprojektu"] = czi["projekt"]
+logger.info('doplnuji prijemce')
+czi["prijemce"] = czi.apply(lambda x: dict(obchodniJmeno=x["prijemce"],ico=x["ico"],hlidacJmeno=getJmenoFromIco(x["ico"])), axis=1)
+
+logger.info('kosmeticke upravy')
+czi["zdroj"] = "czechinvest"
+czi["url"] = "https://www.czechinvest.org/cz/Sluzby-pro-investory/Investicni-pobidky"
+#czi = czi.rename(columns={'id':'iddotace'})
+
+czi = czi[['iddotace', 'nazevprojektu', 'program', 'prijemce', 'rozhodnuti', 'chyba', 'zdroj', 'url']]
+
+prep_dotace_for_export(czi)
+save_to_postgres(czi, "dotace", "czechinvest")
+logger.info('czechinvest uspesne zpracovan')
+
+logger.info('Konec skriptu')
+
+
+
 #test rest,.. atakdále
 # dotace2006[((dotace2006["smlouva_narodni_verejne_prostredky"] == 0) &
 #     (dotace2006["proplaceno_narodni_verejne_prostredky"] == 0) &
@@ -553,4 +602,3 @@ logger.info('SZIF uspesne zpracovano')
 
 
 # ((~szif["id"].str.contains("spd2014")) & (~szif["id"].str.contains("spd2015")) & (~szif["id"].str.contains("spd2016"))& (~szif["id"].str.contains("spd2017"))& (~szif["id"].str.contains("spd2018")))
-
