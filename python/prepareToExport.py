@@ -26,7 +26,7 @@ report = []
 #     logger.error('Missing environment variable. Please set environment variable in following format: [POSTGRES_CONNECTION="postgresql://username:password@localhost:5432"]')
 #     exit()
 postgre_cnn_cleaning = os.environ.get('POSTGRES_CONNECTION') +"/cleaning"
-postgre_cnn_export = os.environ.get('POSTGRES_CONNECTION') +"/export"
+postgre_cnn_export = os.environ.get('POSTGRES_CONNECTION') +"/final"
 
 
 def dict2json(dictionary):
@@ -80,6 +80,8 @@ logger.info('Loading dotinfo')
 dotinfo = pd.read_sql_table("dotace", postgre_cnn_cleaning, schema="dotinfo")
 logger.info('Loading szif')
 szif = pd.read_sql_table("dotace", postgre_cnn_cleaning, schema="szif")
+logger.info('Loading czechinvest')
+czi = pd.read_sql_table("dotace", postgre_cnn_cleaning, schema="czechinvest")
 
 # zajistit unikátnost id
 logger.info('nastavuji index')
@@ -87,12 +89,14 @@ cedr["iddotace"] = "cedr-" + cedr["iddotace"]
 eufondy["iddotace"] = "eufondy-" + eufondy["iddotace"]
 dotinfo["iddotace"] = "dotinfo-" + dotinfo["iddotace"]
 szif["iddotace"] = "szif-" + szif["iddotace"]
+czi["iddotace"] = "czechinvest-" + czi["iddotace"]
 
 #zapsat počty záznamů
 report.append(f"Z cedr bylo nacteno {len(cedr.index)} polozek.")
 report.append(f"Z eufondy bylo nacteno {len(eufondy.index)} polozek.")
 report.append(f"Z dotinfo bylo nacteno {len(dotinfo.index)} polozek.")
 report.append(f"Z szif bylo nacteno {len(szif.index)} polozek. Tyto zaznamy jsou unikatni (neexistuje o nich informace v CEDRu).")
+report.append(f"Z czechinvest bylo nacteno {len(czi.index)} polozek. Tyto zaznamy jsou unikatni (neexistuje o nich informace v CEDRu).")
 # merge
 logger.info('spojuji zdroje')
 merged = pd.concat([cedr,eufondy,dotinfo])
@@ -104,11 +108,17 @@ logger.info('Hledam podobne dotace podle kodu projektu')
 seznamZdroju = merged.groupby("kodprojektu").apply(lambda x: [ dict(nazev=z,url=u) for z,u in zip(x["zdroj"], x["url"])] )
 merged["zdroje"] = merged.apply(lambda x: [dict(dct, isPrimary=True) if dct["nazev"] == x["zdroj"] else dct for dct in seznamZdroju[x["kodprojektu"]] ] ,axis=1 )
 
-#nezapomenout zmergovat ještě SZIF
+#nezapomenout zmergovat ještě SZIF a Czechinvest
 logger.info('pridavam SZIF')
 szif = szif.set_index("iddotace", drop=False)
 szif["zdroje"] = szif.apply(lambda x: [dict(nazev=x["zdroj"], url=x["url"], isPrimary=True )] ,axis=1)
 merged = pd.concat([merged,szif])
+
+logger.info('pridavam Czechinvest')
+czi = czi.set_index("iddotace", drop=False)
+czi["zdroje"] = czi.apply(lambda x: [dict(nazev=x["zdroj"], url=x["url"], isPrimary=True )] ,axis=1)
+merged = pd.concat([merged,czi])
+
 # vynulovat nány 
 merged = merged.where(pd.notnull(merged), None)
 report.append(f"Po spojeni zdroju mame celkem {len(merged.index)} polozek.")
@@ -172,12 +182,13 @@ merged["chyba"] = merged["chyba"].map(dict2json)
 # | merged.duplicated(["kodprojektu", "sum_cer"])
 
 f_not_szif = ~merged.zdroj.str.contains("szif")
+f_not_czechinvest = ~merged.zdroj.str.contains("czechinvest")
 f_not_cedr = ~merged.zdroj.str.contains("cedr")
 
 #### statistiky
 #REPORT 1 duplicity - potencionální duplicity pro další koumání
 logger.info('hledam potencionalni duplicity')
-duplicates = merged[merged.duplicated(["kodprojektu","sum_max","ico"], keep=False) & f_not_szif].drop("data", axis=1)
+duplicates = merged[merged.duplicated(["kodprojektu","sum_max","ico"], keep=False) & f_not_szif & f_not_czechinvest].drop("data", axis=1)
 duplicates.sort_values("kodprojektu")
 report.append(f"Celkem nalezeno {len(duplicates.index)} potencionalnich duplicit.")
 #save_to_postgres(duplicates, "duplicity", "dotace")
@@ -185,7 +196,7 @@ duplicates.to_csv("duplicates.csv.gz", index=False, compression="gzip")
 
 #REPORT 2 - tyto informace chybí v cedru (nepodařili se najít podle project identificator) - proč
 logger.info('Zjistuji co chybi v cedru')
-cedrmissing = merged[(~merged.duplicated("kodprojektu")) & f_not_szif & f_not_cedr ].drop("data", axis=1)
+cedrmissing = merged[(~merged.duplicated("kodprojektu")) & f_not_szif & f_not_cedr & f_not_czechinvest ].drop("data", axis=1)
 report.append(f"Nepodarilo se nalezt v cedru {len(cedrmissing.index)} polozek, ktere by tam mwli byt.")
 #save_to_postgres(cedrmissing, "nenalezeno", "dotace")
 cedrmissing.to_csv("cedrmissing.csv.gz", index=False, compression="gzip")
@@ -198,4 +209,4 @@ with open("report.txt", "w") as txt_file:
         txt_file.write(line + "\n")
 
 
-
+logger.info('Skript uspesne dokoncen')

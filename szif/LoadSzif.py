@@ -17,7 +17,7 @@ database = 'import'
 dbschema = 'szif'
 postgre_cnn = os.environ.get('POSTGRES_CONNECTION')
 #os.chdir("szif")
-#postgre_cnn = "postgresql://hlidacstatu:UtatsCadilh@77.93.208.113:5432"
+
 if not postgre_cnn or postgre_cnn.isspace():
     logging.error('Missing environment variable. Please set environment variable in following format: [POSTGRES_CONNECTION="postgresql://username:password@localhost:5432"]')
     exit()
