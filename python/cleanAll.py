@@ -554,6 +554,9 @@ czi["castka"] = czi["rozhodnuti_mil_czk"].apply(lambda x: x * 1000000)
 czi["datumpodpisu"] = czi["rok_podani"].apply(lambda x: datetime.strptime(str(x), '%Y').strftime("%Y-%m-%dT00:00:00.000Z") if x else None)
 czi["iddotace"] = czi["id"].astype(str)
 
+czi["rozhodnuti_rok"] = czi["rozhodnuti_rok"].apply(lambda x: re.match(r"\d\d\d\d", x).group() if x!= None else None)
+czi["rozhodnuti_rok"] = czi["rozhodnuti_rok"].astype(int)
+
 # odstranit zrušené dotace
 czi = czi[czi["zruseno"].isna()]
 
